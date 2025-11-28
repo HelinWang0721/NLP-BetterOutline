@@ -1,45 +1,27 @@
-"""
-Performance Comparison and Improvement Measurement
-Demonstrates how the new criteria-integrated system improves outline quality
-"""
-
 import json
 import numpy as np
-from typing import Dict, List, Tuple
+import matplotlib.pyplot as plt
+from typing import Dict, List
 from scipy import stats
 from criteria_analysis import CriteriaAnalyzer
-
-# Optional matplotlib for visualization
-try:
-    import matplotlib.pyplot as plt
-    HAS_MATPLOTLIB = True
-except ImportError:
-    HAS_MATPLOTLIB = False
 
 
 def load_baseline_data(baseline_path: str = "./baseline_outlines_eval.json") -> List[Dict]:
     """Load baseline (minimal prompting) evaluation data"""
-    try:
-        with open(baseline_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print(f"Warning: {baseline_path} not found. Using demo data.")
-        return []
+    with open(baseline_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 
 def load_improved_data(improved_path: str = "./improved_outlines_eval.json") -> List[Dict]:
     """Load improved (criteria-integrated) evaluation data"""
-    try:
-        with open(improved_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print(f"Warning: {improved_path} not found. Will generate demo data.")
-        return []
+    with open(improved_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 
-def extract_criteria_scores(evaluation_data: List[Dict]) -> np.ndarray:
+def extract_criteria_scores_legacy(evaluation_data: List[Dict]) -> np.ndarray:
     """
-    Extract individual criterion scores from evaluation data
+    Legacy function - kept for backward compatibility
+    Extract scores and average across models
     
     Returns:
         Array of shape (n_samples, 15) - one row per outline, 15 criteria columns
@@ -47,97 +29,104 @@ def extract_criteria_scores(evaluation_data: List[Dict]) -> np.ndarray:
     if not evaluation_data:
         return np.array([])
     
-    # Each entry might have multiple models, average across them
-    all_scores = []
+    analyzer = CriteriaAnalyzer()
+    scores_matrix, _ = analyzer.extract_scores_matrix(evaluation_data)
     
-    for entry in evaluation_data:
-        # Check if evaluation data is nested under "evaluation" key
-        eval_data = entry.get("evaluation", entry)
-        
-        sample_scores = []
-        for model_name, model_data in eval_data.items():
-            # Skip non-model keys if mixed in
-            if not isinstance(model_data, (list, tuple)):
-                continue
-                
-            if len(model_data) >= 1:
-                scores = model_data[0]  # First element is scores list
-                if isinstance(scores, list) and len(scores) == 15:
-                    sample_scores.append(scores)
-        
-        if sample_scores:
-            # Average across models for this sample
-            avg_scores = np.mean(sample_scores, axis=0)
-            all_scores.append(avg_scores)
-    
-    return np.array(all_scores)
+    return np.mean(scores_matrix, axis=2)
 
 
 def calculate_improvement_metrics(
-    baseline_scores: np.ndarray,
-    improved_scores: np.ndarray
+    baseline_data: List[Dict],
+    improved_data: List[Dict],
+    analyzer: CriteriaAnalyzer
 ) -> Dict:
     """
-    Calculate comprehensive improvement metrics
+    Calculate comprehensive improvement metrics using CriteriaAnalyzer
     
     Args:
-        baseline_scores: Shape (n_baseline, 15)
-        improved_scores: Shape (n_improved, 15)
+        baseline_data: Baseline evaluation data
+        improved_data: Improved evaluation data
+        analyzer: CriteriaAnalyzer instance
         
     Returns:
         Dictionary of improvement metrics
     """
-    criteria_names = [
-        "合理性", "新颖程度", "悬念", "反转和惊喜", "期待感",
-        "目标", "读者偏好", "设定复杂性", "情节复杂性", "代入感",
-        "情感波动", "一致性", "相关度", "结局", "情节分配"
-    ]
+    min_samples = min(len(baseline_data), len(improved_data))
     
-    criteria_weights = [1.0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.3, 0.3, 0.3, 0.7, 0.3, 1.0, 1.0, 1.0, 1.0]
+    if min_samples == 0:
+
+        return {
+            'overall_baseline_mean': 0.0,
+            'overall_improved_mean': 0.0,
+            'overall_improvement': 0.0,
+            'improvement_percentage': 0.0,
+            't_statistic': 0.0,
+            'p_value': 1.0,
+            'statistically_significant': False,
+            'cohens_d': 0.0,
+            'confidence_interval_95': (0.0, 0.0),
+            'criteria_names': analyzer.criteria_names,
+            'baseline_per_criterion': [0.0] * 15,
+            'improved_per_criterion': [0.0] * 15,
+            'improvement_per_criterion': [0.0] * 15,
+            'n_baseline_samples': 0,
+            'n_improved_samples': 0,
+            'reliability_baseline': None,
+            'reliability_improved': None
+        }
     
-    # Calculate weighted total scores
-    baseline_total = np.sum(baseline_scores * criteria_weights, axis=1)
-    improved_total = np.sum(improved_scores * criteria_weights, axis=1)
+    baseline_subset = baseline_data[:min_samples]
+    improved_subset = improved_data[:min_samples]
     
-    # Overall statistics
-    baseline_mean = np.mean(baseline_total)
-    improved_mean = np.mean(improved_total)
-    improvement_pct = ((improved_mean - baseline_mean) / baseline_mean) * 100
+    comparison = analyzer.compare_systems(baseline_subset, improved_subset)
     
-    # Statistical test (using available samples)
-    min_samples = min(len(baseline_total), len(improved_total))
-    if min_samples > 1:
-        t_stat, p_value = stats.ttest_ind(
-            improved_total[:min_samples],
-            baseline_total[:min_samples]
-        )
-    else:
-        t_stat, p_value = 0, 1.0
+    baseline_matrix, _ = analyzer.extract_scores_matrix(baseline_subset)
+    improved_matrix, _ = analyzer.extract_scores_matrix(improved_subset)
     
-    # Per-criterion improvements
-    baseline_avg_per_criterion = np.mean(baseline_scores, axis=0)
-    improved_avg_per_criterion = np.mean(improved_scores, axis=0)
-    improvement_per_criterion = improved_avg_per_criterion - baseline_avg_per_criterion
+    baseline_per_criterion = np.mean(baseline_matrix, axis=(0, 2))
+    improved_per_criterion = np.mean(improved_matrix, axis=(0, 2))
+    improvement_per_criterion = improved_per_criterion - baseline_per_criterion
     
+    reliability_baseline = analyzer.inter_rater_reliability(baseline_matrix)
+    reliability_improved = analyzer.inter_rater_reliability(improved_matrix)
+    
+
     return {
-        'overall_baseline_mean': baseline_mean,
-        'overall_improved_mean': improved_mean,
-        'overall_improvement': improved_mean - baseline_mean,
-        'improvement_percentage': improvement_pct,
-        't_statistic': t_stat,
-        'p_value': p_value,
-        'statistically_significant': p_value < 0.05,
-        'criteria_names': criteria_names,
-        'baseline_per_criterion': baseline_avg_per_criterion.tolist(),
-        'improved_per_criterion': improved_avg_per_criterion.tolist(),
+        'overall_baseline_mean': comparison['baseline_mean'],
+        'overall_improved_mean': comparison['improved_mean'],
+        'overall_improvement': comparison['mean_improvement'],
+        'improvement_percentage': comparison['improvement_percentage'],
+        't_statistic': comparison['t_statistic'],
+        'p_value': comparison['p_value'],
+        'statistically_significant': comparison['significant'],
+        'cohens_d': comparison['cohens_d'],
+        'confidence_interval_95': comparison['confidence_interval_95'],
+        'criteria_names': analyzer.criteria_names,
+        'baseline_per_criterion': baseline_per_criterion.tolist(),
+        'improved_per_criterion': improved_per_criterion.tolist(),
         'improvement_per_criterion': improvement_per_criterion.tolist(),
-        'n_baseline_samples': len(baseline_scores),
-        'n_improved_samples': len(improved_scores)
+        'n_baseline_samples': len(baseline_data),
+        'n_improved_samples': len(improved_data),
+        'reliability_baseline': reliability_baseline,
+        'reliability_improved': reliability_improved
     }
 
 
 def generate_comparison_report(metrics: Dict, output_path: str = "./PERFORMANCE_REPORT.md"):
     """Generate a comprehensive comparison report"""
+    
+
+    def format_reliability(reliability_dict):
+        if reliability_dict and isinstance(reliability_dict, dict):
+            corr = f"{reliability_dict['inter_model_correlation']:.3f}"
+            alpha = f"{reliability_dict['cronbach_alpha']:.3f}"
+        else:
+            corr = 'N/A'
+            alpha = 'N/A'
+        return corr, alpha
+    
+    baseline_corr, baseline_alpha = format_reliability(metrics.get('reliability_baseline'))
+    improved_corr, improved_alpha = format_reliability(metrics.get('reliability_improved'))
     
     report = f"""# Performance Comparison Report
 ## Criteria-Integrated Prompts vs. Minimal Baseline
@@ -153,10 +142,26 @@ def generate_comparison_report(metrics: Dict, output_path: str = "./PERFORMANCE_
 - **Improvement**: +{metrics['overall_improvement']:.2f} points
 - **Statistical Significance**: {'✅ YES (p < 0.05)' if metrics['statistically_significant'] else '❌ No (p ≥ 0.05)'}
 - **P-value**: {metrics['p_value']:.4f}
+- **Effect Size (Cohen's d)**: {metrics['cohens_d']:.3f}
+- **95% Confidence Interval**: [{metrics['confidence_interval_95'][0]:.2f}, {metrics['confidence_interval_95'][1]:.2f}]
 
 **Sample Sizes**:
 - Baseline System: {metrics['n_baseline_samples']} outlines
 - Improved System: {metrics['n_improved_samples']} outlines
+
+---
+
+## Inter-Rater Reliability
+
+**Baseline System**:
+- Inter-model correlation: {baseline_corr}
+- Cronbach's alpha: {baseline_alpha}
+
+**Improved System**:
+- Inter-model correlation: {improved_corr}
+- Cronbach's alpha: {improved_alpha}
+
+> **Note**: Inter-model correlation > 0.6 and Cronbach's alpha > 0.7 indicate good reliability.
 
 ---
 
@@ -187,7 +192,7 @@ The new criteria-integrated system shows improvements across most narrative dime
 
 """
     
-    # Find top 3 improvements
+
     improvements = list(enumerate(metrics['improvement_per_criterion']))
     improvements.sort(key=lambda x: x[1], reverse=True)
     
@@ -198,7 +203,7 @@ The new criteria-integrated system shows improvements across most narrative dime
         pct = (improvement / baseline * 100) if baseline > 0 else 0
         report += f"{i}. **{name}**: +{improvement:.1f} points ({pct:+.1f}%) — {baseline:.1f} → {new_val:.1f}\n"
     
-    # Find areas needing attention (if any declined)
+
     declines = [(idx, imp) for idx, imp in improvements if imp < 0]
     
     if declines:
@@ -222,36 +227,22 @@ The new criteria-integrated system shows improvements across most narrative dime
 
 **Alternative Hypothesis (H₁)**: The new system produces higher quality outlines.
 
-**Test**: Independent samples t-test
+**Test**: Paired samples t-test (comparing same tasks across both systems)
 - **t-statistic**: {metrics['t_statistic']:.3f}
 - **p-value**: {metrics['p_value']:.4f}
+- **Effect size (Cohen's d)**: {metrics['cohens_d']:.3f}
+- **95% Confidence Interval**: [{metrics['confidence_interval_95'][0]:.2f}, {metrics['confidence_interval_95'][1]:.2f}]
 - **Significance level**: α = 0.05
 
 **Result**: {'✅ REJECT H₀' if metrics['statistically_significant'] else '❌ FAIL TO REJECT H₀'}
 
 {'The new system shows **statistically significant** improvement over the baseline.' if metrics['statistically_significant'] else 'The improvement is not statistically significant at α=0.05. More samples may be needed.'}
 
----
-
-## Methodology
-
-### Baseline System (Old)
-- **API**: OpenAI (o1-preview + gpt-4o)
-- **Approach**: Two-stage generation without criteria awareness
-- **Cost**: ~$15-35 per outline
-- **Refinement**: None
-
-### New System (Criteria-Integrated)
-- **API**: OpenRouter (qwen-2.5-72b-instruct)
-- **Approach**: Criteria-aware generation with self-evaluation
-- **Cost**: ~$0.50-1.50 per outline (10-50x cheaper)
-- **Refinement**: 2-3 iterative improvements
-
-### Evaluation
-- **Evaluators**: 4-5 independent LLM models
-- **Criteria**: 15 narrative quality dimensions
-- **Scoring**: 0-100 points per criterion
-- **Weights**: Varied by criterion importance
+**Effect Size Interpretation**:
+- |d| < 0.2: Small effect
+- 0.2 ≤ |d| < 0.5: Small to medium effect
+- 0.5 ≤ |d| < 0.8: Medium to large effect
+- |d| ≥ 0.8: Large effect
 
 ---
 
@@ -309,22 +300,17 @@ The new criteria-integrated system shows improvements across most narrative dime
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(report)
     
-    print(f"\n✅ Performance report saved to: {output_path}")
+    print(f"\nPerformance report saved to: {output_path}")
     return report
 
 
 def create_comparison_visualization(metrics: Dict, output_path: str = "./performance_comparison.png"):
     """Create visualization comparing baseline vs new system"""
     
-    if not HAS_MATPLOTLIB:
-        print("⚠️  Matplotlib not available. Skipping visualization.")
-        print("   Install with: pip install matplotlib")
-        return
-    
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     fig.suptitle('Criteria-Integrated System Performance Analysis', fontsize=16, fontweight='bold')
     
-    # 1. Overall comparison
+
     ax = axes[0, 0]
     systems = ['Baseline\n(OpenAI)', 'New System\n(Criteria-Integrated)']
     means = [metrics['overall_baseline_mean'], metrics['overall_improved_mean']]
@@ -334,19 +320,19 @@ def create_comparison_visualization(metrics: Dict, output_path: str = "./perform
     ax.set_title('Overall Quality Comparison', fontsize=13, fontweight='bold')
     ax.set_ylim(0, max(means) * 1.2)
     
-    # Add value labels
+
     for bar, val in zip(bars, means):
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width()/2., height,
                 f'{val:.1f}', ha='center', va='bottom', fontsize=11, fontweight='bold')
     
-    # Add improvement percentage
+
     improvement_pct = metrics['improvement_percentage']
     ax.text(0.5, max(means) * 1.1, f'Improvement: {improvement_pct:+.1f}%',
             ha='center', fontsize=12, fontweight='bold',
             color='green' if improvement_pct > 0 else 'red')
     
-    # 2. Per-criterion comparison
+
     ax = axes[0, 1]
     criteria_short = [name[:4] + '.' for name in metrics['criteria_names']]
     x = np.arange(len(criteria_short))
@@ -364,7 +350,7 @@ def create_comparison_visualization(metrics: Dict, output_path: str = "./perform
     ax.legend()
     ax.grid(axis='y', alpha=0.3)
     
-    # 3. Improvement magnitude
+
     ax = axes[1, 0]
     improvements = metrics['improvement_per_criterion']
     colors_imp = ['green' if x > 0 else 'red' if x < 0 else 'gray' for x in improvements]
@@ -374,7 +360,7 @@ def create_comparison_visualization(metrics: Dict, output_path: str = "./perform
     ax.axvline(x=0, color='black', linestyle='-', linewidth=0.8)
     ax.grid(axis='x', alpha=0.3)
     
-    # 4. Statistical summary
+
     ax = axes[1, 1]
     ax.axis('off')
     
@@ -406,7 +392,7 @@ def create_comparison_visualization(metrics: Dict, output_path: str = "./perform
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"✅ Visualization saved to: {output_path}")
+    print(f"Visualization saved to: {output_path}")
     plt.close()
 
 
@@ -424,100 +410,61 @@ def main(seed=None, simulate_variance=True):
     print("="*60)
     
     if seed is not None:
-        print(f"\n🎲 Using random seed: {seed}")
+        print(f"\nUsing random seed: {seed}")
         np.random.seed(seed)
     else:
-        # Use time-based seed for different results each run
+
         import time
         seed = int(time.time() * 1000) % 10000
         np.random.seed(seed)
-        print(f"\n🎲 Random seed: {seed} (use --seed {seed} to reproduce)")
+        print(f"\nRandom seed: {seed} (use --seed {seed} to reproduce)")
     
     print()
     
-    # Load data
-    print("📂 Loading evaluation data...")
-    baseline_eval = load_baseline_data("./baseline_outlines_eval.json")
-    improved_eval = load_improved_data("./improved_outlines_eval.json")
+
+    analyzer = CriteriaAnalyzer()
     
-    # Extract scores
-    print("📊 Extracting criterion scores...")
-    baseline_scores = extract_criteria_scores(baseline_eval)
-    improved_scores = extract_criteria_scores(improved_eval)
+
+    try:
+        baseline_eval = load_baseline_data("./baseline_outlines_eval.json")
+        improved_eval = load_improved_data("./improved_outlines_eval.json")
+    except FileNotFoundError as e:
+        print(f"\nError: Required evaluation data files not found.")
+        print(f"\nPlease run gen-tasks.py first to generate the evaluation data:")
+        print(f"  python gen-tasks.py --num <number_of_samples>")
+        print(f"\nThis will create the required baseline and improved outline files.")
+        return
     
-    if len(baseline_scores) == 0 or len(improved_scores) == 0:
-        print("\n⚠️  Insufficient data for comparison.")
-        print("   Please generate outlines with both systems first.")
-        print("\n   Generating simulated comparison data...\n")
-        
-        # Simulate with realistic variance
-        if len(baseline_scores) > 0:
-            # Use real baseline, simulate improvement with variance
-            if simulate_variance:
-                # Add realistic variance: different improvements per criterion
-                base_improvement = np.random.uniform(1.10, 1.16, 15)  # 10-16% per criterion
-                sample_variance = np.random.normal(0, 0.02, (10, 15))  # ±2% per sample
-                improvement_factor = base_improvement + sample_variance
-                improvement_factor = np.clip(improvement_factor, 1.05, 1.20)
-            else:
-                improvement_factor = np.random.uniform(1.08, 1.18, baseline_scores.shape)
-            
-            improved_scores = baseline_scores * improvement_factor
-        else:
-            # Simulate both with realistic distributions
-            n_samples = 10
-            
-            # Baseline: realistic score distribution (60-75 range, varying by criterion)
-            baseline_mean_per_criterion = np.random.uniform(62, 72, 15)
-            baseline_scores = np.zeros((n_samples, 15))
-            for i in range(15):
-                baseline_scores[:, i] = np.random.normal(
-                    baseline_mean_per_criterion[i], 
-                    3,  # std dev
-                    n_samples
-                )
-            baseline_scores = np.clip(baseline_scores, 55, 80)
-            
-            # Improved: add realistic improvements
-            if simulate_variance:
-                improvement_per_criterion = np.random.uniform(0.10, 0.16, 15)
-                improved_scores = baseline_scores * (1 + improvement_per_criterion)
-                # Add per-sample variance
-                noise = np.random.normal(0, 1.5, improved_scores.shape)
-                improved_scores += noise
-            else:
-                improved_scores = baseline_scores * np.random.uniform(1.08, 1.18, (n_samples, 15))
-            
-            improved_scores = np.clip(improved_scores, 60, 95)
+
+    print("Calculating improvement metrics...")
+    metrics = calculate_improvement_metrics(baseline_eval, improved_eval, analyzer)
     
-    # Calculate metrics
-    print("🔬 Calculating improvement metrics...")
-    metrics = calculate_improvement_metrics(baseline_scores, improved_scores)
-    
-    # Generate report
-    print("\n📝 Generating comparison report...")
+
+    print("\nGenerating comparison report...")
     generate_comparison_report(metrics, "./PERFORMANCE_REPORT.md")
     
-    # Create visualization
-    print("📊 Creating visualization...")
+
+    print("Creating visualization...")
     try:
         create_comparison_visualization(metrics, "./performance_comparison.png")
     except Exception as e:
-        print(f"⚠️  Could not create visualization: {e}")
+        print(f"Warning: Could not create visualization: {e}")
         print("   (matplotlib not available or display issues)")
     
-    # Print summary
+
     print("\n" + "="*60)
     print("   SUMMARY")
     print("="*60)
-    print(f"\n{'✅ IMPROVEMENT' if metrics['improvement_percentage'] > 0 else '❌ DECLINE'}: {metrics['improvement_percentage']:+.1f}%")
+    print(f"\n{'IMPROVEMENT' if metrics['improvement_percentage'] > 0 else 'DECLINE'}: {metrics['improvement_percentage']:+.1f}%")
     print(f"\nBaseline:     {metrics['overall_baseline_mean']:.2f} points")
     print(f"New System:   {metrics['overall_improved_mean']:.2f} points")
     print(f"Difference:   {metrics['overall_improvement']:+.2f} points")
+    print(f"Effect Size:  {metrics['cohens_d']:.3f} (Cohen's d)")
     print(f"\nStatistically Significant: {'YES (p={:.4f})'.format(metrics['p_value']) if metrics['statistically_significant'] else 'NO (p={:.4f})'.format(metrics['p_value'])}")
-    print(f"\n📄 Full report: PERFORMANCE_REPORT.md")
-    print(f"📊 Visualization: performance_comparison.png")
+    print(f"\nFull report: PERFORMANCE_REPORT.md")
+    print(f"Visualization: performance_comparison.png")
     print("\n" + "="*60 + "\n")
+
 
 
 if __name__ == "__main__":
