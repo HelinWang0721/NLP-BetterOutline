@@ -11,11 +11,7 @@ api:
 # Model Configuration
 model:
   # Primary model for outline generation
-  name: "qwen/qwen-2.5-72b-instruct"
-  # Alternative models you can try:
-  # - "meta-llama/llama-3.1-70b-instruct"
-  # - "anthropic/claude-3.5-sonnet"
-  # - "google/gemini-flash-1.5-8b"
+  name: "google/gemini-2.5-pro"
   
   # Generation parameters
   temperature: 0.75
