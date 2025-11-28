@@ -6,7 +6,7 @@ api:
   provider: "openrouter"
   base_url: "https://openrouter.ai/api/v1"
   # Add your OpenRouter API key below (get it from https://openrouter.ai/keys)
-  api_key: ""
+  api_key: "add your api key here" 
   
 # Model Configuration
 model:
