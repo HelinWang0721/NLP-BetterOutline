@@ -1,0 +1,107 @@
+# Configuration for BetterOutline Project
+# OpenRouter API Configuration and System Settings
+
+# API Configuration
+api:
+  provider: "openrouter"
+  base_url: "https://openrouter.ai/api/v1"
+  # Add your OpenRouter API key below (get it from https://openrouter.ai/keys)
+  api_key: "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"
+  
+# Model Configuration
+model:
+  # Primary model for outline generation
+  name: "qwen/qwen-2.5-72b-instruct"
+  # Alternative models you can try:
+  # - "meta-llama/llama-3.1-70b-instruct"
+  # - "anthropic/claude-3.5-sonnet"
+  # - "google/gemini-flash-1.5-8b"
+  
+  # Generation parameters
+  temperature: 0.75
+  max_tokens: 8000
+  top_p: 0.9
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+
+# Criteria Integration Settings
+criteria:
+  # Whether to include criteria in generation prompts
+  integrate_in_generation: true
+  
+  # Whether to enable self-evaluation
+  enable_self_evaluation: true
+  
+  # Number of refinement iterations
+  refinement_iterations: 2
+  
+  # Criteria weights (can be optimized mathematically)
+  weights:
+    rationality: 1.0          # 合理性
+    novelty: 0.5              # 新颖程度
+    suspense: 0.5             # 悬念
+    twist: 0.5                # 反转和惊喜
+    anticipation: 0.5         # 期待感
+    goal: 0.5                 # 目标
+    reader_preference: 0.3    # 读者偏好
+    setting_complexity: 0.3   # 设定复杂性
+    plot_complexity: 0.3      # 情节复杂性
+    immersion: 0.7            # 代入感
+    emotional_impact: 0.3     # 情感波动
+    consistency: 1.0          # 一致性
+    relevance: 1.0            # 相关度
+    ending: 1.0               # 结局
+    plot_distribution: 1.0    # 情节分配
+
+# Evaluation Settings
+evaluation:
+  # Models to use for multi-model voting
+  voting_models:
+    - model: "google/gemini-2.0-flash-001"
+      temperature: 0.5
+      max_tokens: 15000
+    - model: "deepseek/deepseek-chat-v3.1"
+      temperature: 0.5
+      max_tokens: 15000
+    - model: "qwen/qwen3-235b-a22b:free"
+      temperature: 0.5
+      max_tokens: 15000
+    - model: "x-ai/grok-4.1-fast:free"
+      temperature: 0.5
+      max_tokens: 15000
+  
+  # Statistical analysis settings
+  confidence_level: 0.95  # For confidence intervals
+  significance_level: 0.05  # For hypothesis testing
+
+# Generation Constraints
+generation:
+  # Character range
+  min_characters: 3
+  max_characters: 6
+  
+  # Scene range
+  min_scenes: 4
+  max_scenes: 10
+  
+  # Event range
+  min_events: 8
+  max_events: 18
+
+# Output Settings
+output:
+  save_intermediate_results: true
+  output_directory: "./output"
+  enable_logging: true
+  log_level: "INFO"
+
+# Academic Analysis
+analysis:
+  enable_weight_optimization: true
+  
+  # Optimization method: "gradient_descent", "grid_search", "bayesian"
+  optimization_method: "gradient_descent"
+  
+  enable_correlation_analysis: true
+  
+  generate_statistical_reports: true
