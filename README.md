@@ -84,14 +84,14 @@ Based on the methodology:
 ## Project Structure
 
 ```
-├── baseline_gen.py         # Minimal prompting generation
-├── outline_gen.py          # Criteria-integrated generation
-├── gen-tasks.py            # Batch generation script
-├── vote.py                 # Multi-model evaluation script
-├── performance_comparison.py  # Statistical analysis & reporting
-├── criteria_analysis.py    # Weight optimization
-├── gen-prompt.md           # Criteria prompts
-└── config.yaml             # Configuration
+|-- baseline_gen.py         # Minimal prompting generation
+|-- outline_gen.py          # Criteria-integrated generation
+|-- gen-tasks.py            # Batch generation script
+|-- vote.py                 # Multi-model evaluation script
+|-- performance_comparison.py  # Statistical analysis & reporting
+|-- criteria_analysis.py    # Weight optimization
+|-- gen-prompt.md           # Criteria prompts
++-- config.yaml             # Configuration
 ```
 
 ---
